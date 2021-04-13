@@ -1,4 +1,4 @@
-
+# I've changed some things!
 class Move
   attr_accessor :choice, :possibilities, :number
 
