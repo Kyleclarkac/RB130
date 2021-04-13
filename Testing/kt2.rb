@@ -33,7 +33,7 @@ class Space
   end
 
   def empty?
-    move == nil
+    move.nil?
   end
 
   def <=>(other)
@@ -122,7 +122,6 @@ def route_home(board, space, homes)
   end
   false
 end
-
 
 def make_choice(move)
   move.choice.move = nil if move.choice
