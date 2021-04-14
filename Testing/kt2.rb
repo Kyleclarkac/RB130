@@ -1,27 +1,17 @@
+# frozen_string_literal: true
+
 # I've changed some things!
-class Move
-  attr_accessor :choice, :possibilities, :number
 
-  def initialize(number)
-    @choice = nil
-    @possibilities = []
-    @number = number
-  end
-
-  def to_s
-    "Choice: #{choice}, number#{@number}"
-  end
-end
-
+# Space class to define space attributes.
 class Space
   include Comparable
-  attr_accessor :x, :y, :move, :freedom
+  attr_accessor :x, :y, :move, :possibilities
 
-  def initialize(x, y)
-    @x = x 
-    @y = y
+  def initialize(x_coord, y_coord)
+    @x = x_coord
+    @y = y_coord
     @move = nil
-    @freedom = nil
+    @possibilities = nil
   end
 
   def ==(other)
@@ -29,129 +19,72 @@ class Space
   end
 
   def to_s
-    "X:#{x}, Y:#{y}"
+    "X:#{x}, Y:#{y}, Move:#{move}"
   end
 
   def empty?
     move.nil?
   end
-
-  def <=>(other)
-    freedom <=> other.freedom
-  end
-
 end
 
+# This board class will do all the heavy lifting.
 class Board
-  attr_accessor :spaces
+  attr_accessor :spaces, :moves
 
   def initialize
+    @moves = nil
     @spaces = []
     (1..8).each do |x|
       (1..8).each do |y|
-        spaces << Space.new(x,y)
+        spaces << Space.new(x, y)
       end
     end
   end
 
-  def to_s
-    spaces.to_s
-  end
-
   def legal_moves_from(current_space)
-    possibilities = []
-    spaces.each do |space|
-      possibilities << space if current_space.x + 1 == space.x && current_space.y + 2 == space.y && space.empty?
-      possibilities << space if current_space.x + 1 == space.x && current_space.y - 2 == space.y && space.empty?
-      possibilities << space if current_space.x - 1 == space.x && current_space.y + 2 == space.y && space.empty?
-      possibilities << space if current_space.x - 1 == space.x && current_space.y - 2 == space.y && space.empty?
-      possibilities << space if current_space.x + 2 == space.x && current_space.y + 1 == space.y && space.empty?
-      possibilities << space if current_space.x + 2 == space.x && current_space.y - 1 == space.y && space.empty?
-      possibilities << space if current_space.x - 2 == space.x && current_space.y + 1 == space.y && space.empty?
-      possibilities << space if current_space.x - 2 == space.x && current_space.y - 1 == space.y && space.empty?
+    # finds the legal moves from a specific space.
+    x1 = current_space.x
+    y1 = current_space.y
+    spaces.select do |space|
+      x1 != space.x &&
+        y1 != space.y &&
+        [1, 3].include?(((x1 + y1) - (space.x + space.y)).abs) &&
+        space.empty?
     end
-    possibilities
   end
 
-end
-
-def possibilities_from(board, move, homes)
-  possibilities = board.legal_moves_from(move.choice)
-  possibilities.each do |space|
-    possibilities.delete(space) unless route_home(board, space, homes) #&& all_accessable(board, space, homes)
+  def next_move(moves)
+    # picks the next move to add
+    moves << moves[-1].possibilities.shift
+    moves[-1].move = moves[-2].move + 1
+    generate_possibilities_from(moves[-1])
   end
-  possibilities.each { |space| space.freedom = board.legal_moves_from(space).size}
-  possibilities.sort_by {|space| space.freedom}
-end
 
-def all_accessable(board, space, homes)
-  remaing = []
-  board.spaces.each {|space| remaing << space if space.move == nil}
+  def generate_possibilities_from(space)
+    # creates a list of possible moves from a space.
+    space.possibilities = legal_moves_from(space).sort_by { |possible| legal_moves_from(possible).size }
+  end
 
-  accessable = board.legal_moves_from(space)
-  return true if remaing.all?{|space| accessable.include?(space)}
-  
-  previous = accessable.size
-  
-  loop do 
-    accessable.each do |new_space|
-      accessable += board.legal_moves_from(new_space)
-      accessable.uniq!
-      return true if remaing.all?{|home| accessable.include?(home)}
+  def make_guesses
+    while moves.size < 64
+      while moves[-1].possibilities.empty?
+        moves[-1].move = nil
+        moves.delete_at(-1)
+      end
+      next_move(moves)
     end
-    break if previous == accessable.size
-      previous = accessable.size
   end
-  false
-end
 
-def route_home(board, space, homes)
-  accessable = board.legal_moves_from(space)
-  return true if homes.any?{|space| accessable.include?(space)}
-  
-  previous = accessable.size
-  
-  loop do 
-    accessable.each do |new_space|
-      accessable += board.legal_moves_from(new_space)
-      accessable.uniq!
-      return true if homes.any?{|home| accessable.include?(home)}
-    end
-    break if previous == accessable.size
-      previous = accessable.size
+  def find_tour_from(x_coord, y_coord)
+    # finds a tour from starting x and y coordinates.
+    self.moves = spaces.select { |space| space.x == x_coord && space.y == y_coord }
+    moves[0].move = 1
+    generate_possibilities_from(moves[0])
+    make_guesses
+    puts moves
+    initialize
   end
-  false
-end
-
-def make_choice(move)
-  move.choice.move = nil if move.choice
-  move.choice = move.possibilities.shift
-  move.choice.move = move
 end
 
 board = Board.new
-first_move = Move.new(1)
-first_move.choice = Space.new(5,5)
-
-homes = board.legal_moves_from(first_move.choice)
-
-moves = [first_move]
-
-puts "here we go!"
-
-greatest = 0
-
-while moves.size < 64 do 
-  moves << Move.new(moves[-1].number + 1)
-  moves[-1].possibilities = possibilities_from(board, moves[-2], homes)
-  while moves[-1].possibilities.empty? do
-    moves[-1].choice.move = nil if moves[-1].choice
-    moves.delete_at(-1)
-  end
-  make_choice(moves[-1])
-  greatest = moves.size if moves.size > greatest
-  puts greatest
- 
-end 
-
-puts moves
+board.find_tour_from(1, 1)
